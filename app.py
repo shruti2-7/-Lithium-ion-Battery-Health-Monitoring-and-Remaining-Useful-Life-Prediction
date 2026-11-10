@@ -123,6 +123,307 @@ def get_status_html(status):
 
 
 # =========================================================
+# ANIMATED STATE OF HEALTH GAUGE
+# =========================================================
+
+def render_animated_soh(soh, status, battery):
+    """Display actual SOH while limiting only the ring to 100%."""
+
+    # Preserve the actual calculated SOH for display.
+    actual_soh = float(soh)
+
+    # Limit only the circular gauge animation to 100%.
+    ring_soh = float(np.clip(actual_soh, 0.0, 100.0))
+
+    status_colors = {
+        "Good": "#35C98A",
+        "Moderate": "#F2AE36",
+        "Critical": "#F05B65",
+        "Anomaly": "#A98BFF"
+    }
+
+    gauge_color = status_colors.get(status, "#20E3CF")
+
+    battery_id = "".join(
+        character for character in str(battery)
+        if character.isalnum()
+    )
+
+    fill_animation = f"aurora-soh-fill-{battery_id}"
+    reveal_animation = f"aurora-soh-reveal-{battery_id}"
+
+    radius = 43
+    circumference = 2 * np.pi * radius
+
+    target_offset = circumference * (1 - ring_soh / 100.0)
+
+    if status == "Anomaly":
+
+        gauge_visual = f"""
+            <svg class="aurora-soh-svg"
+                 viewBox="0 0 100 100"
+                 role="img"
+                 aria-label="Anomaly detected. Actual SOH {actual_soh:.1f} percent">
+
+                <circle
+                    cx="50" cy="50" r="{radius}"
+                    fill="none"
+                    stroke="#293D52"
+                    stroke-width="8"
+                    stroke-dasharray="9 7"
+                />
+
+                <circle
+                    cx="50" cy="50" r="{radius}"
+                    fill="none"
+                    stroke="{gauge_color}"
+                    stroke-width="8"
+                    stroke-linecap="round"
+                    stroke-dasharray="45 225"
+                    transform="rotate(-90 50 50)"
+                />
+
+                <circle
+                    cx="50" cy="50" r="{radius}"
+                    fill="none"
+                    stroke="{gauge_color}"
+                    stroke-width="8"
+                    stroke-linecap="round"
+                    stroke-dasharray="25 245"
+                    stroke-dashoffset="-150"
+                    transform="rotate(-90 50 50)"
+                />
+
+            </svg>
+        """
+
+        value_class = "aurora-soh-value anomaly-value"
+        condition_text = "ANOMALY DETECTED"
+
+        anomaly_badge = """
+            <div class="aurora-anomaly-mark">!</div>
+        """
+
+    else:
+
+        gauge_visual = f"""
+            <svg class="aurora-soh-svg"
+                 viewBox="0 0 100 100"
+                 role="img"
+                 aria-label="State of Health {actual_soh:.1f} percent">
+
+                <circle
+                    class="aurora-soh-track"
+                    cx="50" cy="50" r="{radius}"
+                />
+
+                <circle
+                    class="aurora-soh-progress"
+                    cx="50" cy="50" r="{radius}"
+                />
+
+            </svg>
+        """
+
+        value_class = "aurora-soh-value"
+        condition_text = status.upper()
+        anomaly_badge = ""
+
+    gauge_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+
+        * {{
+            box-sizing: border-box;
+        }}
+
+        body {{
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: Arial, sans-serif;
+        }}
+
+        .aurora-soh-card {{
+            width: 100%;
+            min-height: 116px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 5px 8px;
+            border: 1px solid #2A4259;
+            border-radius: 12px;
+            background: linear-gradient(145deg, #13243A, #0F1C2E);
+        }}
+
+        .aurora-soh-gauge-wrap {{
+            width: 104px;
+            height: 104px;
+            position: relative;
+            flex: 0 0 104px;
+        }}
+
+        .aurora-soh-svg {{
+            width: 104px;
+            height: 104px;
+            display: block;
+            transform: rotate(-90deg);
+        }}
+
+        .aurora-soh-track {{
+            fill: none;
+            stroke: #293D52;
+            stroke-width: 8;
+        }}
+
+        .aurora-soh-progress {{
+            fill: none;
+            stroke: {gauge_color};
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: {circumference:.3f};
+            stroke-dashoffset: {circumference:.3f};
+            animation: {fill_animation} 2s cubic-bezier(.22,.75,.25,1) forwards;
+            filter: drop-shadow(0 0 3px {gauge_color}55);
+        }}
+
+        @keyframes {fill_animation} {{
+            to {{
+                stroke-dashoffset: {target_offset:.3f};
+            }}
+        }}
+
+        .aurora-soh-value {{
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            animation: {reveal_animation} .45s ease-out 1.75s forwards;
+        }}
+
+        .anomaly-value {{
+            opacity: 1 !important;
+            visibility: visible !important;
+            animation: none !important;
+        }}
+
+        .aurora-anomaly-mark {{
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 23px;
+            height: 23px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: {gauge_color};
+            color: #101827;
+            font-size: 16px;
+            font-weight: 900;
+            line-height: 1;
+            z-index: 5;
+            opacity: 1 !important;
+            visibility: visible !important;
+            animation: none !important;
+            box-shadow: 0 0 9px {gauge_color}88;
+        }}
+
+        @keyframes {reveal_animation} {{
+            to {{ opacity: 1; }}
+        }}
+
+        .aurora-soh-number {{
+            color: #F1F7FD;
+            font-size: 23px;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+        }}
+
+        .aurora-soh-label {{
+            color: #9DB3C7;
+            font-size: 9px;
+            letter-spacing: 1.1px;
+            margin-top: 4px;
+        }}
+
+        .aurora-soh-side {{
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }}
+
+        .aurora-soh-heading {{
+            color: #9DB3C7;
+            font-size: 12px;
+            line-height: 1.3;
+        }}
+
+        .aurora-soh-condition {{
+            color: {gauge_color};
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .8px;
+        }}
+
+        @media (prefers-reduced-motion: reduce) {{
+            .aurora-soh-progress {{
+                animation-duration: .01ms;
+                animation-delay: 0ms;
+            }}
+
+            .aurora-soh-value {{
+                animation-delay: .01ms;
+            }}
+        }}
+
+    </style>
+    </head>
+
+    <body>
+
+        <div class="aurora-soh-card">
+
+            <div class="aurora-soh-gauge-wrap">
+
+                {gauge_visual}
+
+                {anomaly_badge}
+
+                <div class="{value_class}">
+                    <div class="aurora-soh-number">{actual_soh:.1f}%</div>
+                    <div class="aurora-soh-label">SOH</div>
+                </div>
+
+            </div>
+
+            <div class="aurora-soh-side">
+                <div class="aurora-soh-heading">State of Health</div>
+                <div class="aurora-soh-condition">{condition_text}</div>
+            </div>
+
+        </div>
+
+    </body>
+    </html>
+    """
+
+    st.components.v1.html(
+        gauge_html,
+        height=125,
+        scrolling=False
+    )
+
+
+# =========================================================
 # SHARED CURRENT MEASUREMENT
 # =========================================================
 
@@ -285,10 +586,7 @@ hr {
 }
 
 
-/* =====================================================
-   MAIN HOMEPAGE AURORA TITLE
-   METALLIC PURPLE - PINK - BLUE GRADIENT
-   ===================================================== */
+/* MAIN HOMEPAGE AURORA TITLE */
 
 .home-title {
     font-size: clamp(3.5rem, 7vw, 5rem);
@@ -315,9 +613,7 @@ hr {
 }
 
 
-/* =====================================================
-   SIDEBAR
-   ===================================================== */
+/* SIDEBAR */
 
 [data-testid="stSidebar"] {
     background: linear-gradient(
@@ -470,9 +766,7 @@ hr {
 }
 
 
-/* =====================================================
-   WELCOME PAGE - GLOWING STEP CARDS
-   ===================================================== */
+/* WELCOME PAGE CARDS */
 
 .welcome-step {
     position: relative;
@@ -490,8 +784,6 @@ hr {
         border-color 0.3s ease;
     overflow: visible;
 }
-
-/* PURPLE - MONITOR */
 
 .welcome-monitor {
     border: 1px solid rgba(168, 113, 255, 0.65);
@@ -520,9 +812,6 @@ hr {
         inset 0 0 24px rgba(168, 113, 255, 0.12);
 }
 
-
-/* PINK - ANALYSE */
-
 .welcome-analyse {
     border: 1px solid rgba(255, 105, 180, 0.65);
     box-shadow:
@@ -549,9 +838,6 @@ hr {
         0 14px 35px rgba(0, 0, 0, 0.35),
         inset 0 0 24px rgba(255, 105, 180, 0.12);
 }
-
-
-/* BLUE - PREDICT */
 
 .welcome-predict {
     border: 1px solid rgba(69, 183, 255, 0.65);
@@ -580,9 +866,6 @@ hr {
         inset 0 0 24px rgba(69, 183, 255, 0.12);
 }
 
-
-/* SHARED CARD TEXT */
-
 .welcome-step-number {
     font-size: 13px;
     font-weight: 800;
@@ -602,9 +885,6 @@ hr {
     font-size: 14px;
     line-height: 1.8;
 }
-
-
-/* PROJECT DESCRIPTION */
 
 .welcome-description {
     color: #B6C6D7;
@@ -628,9 +908,7 @@ hr {
 }
 
 
-/* =====================================================
-   STATUS PILLS
-   ===================================================== */
+/* STATUS PILLS */
 
 .status-pill {
     display: inline-block;
@@ -667,9 +945,7 @@ hr {
 }
 
 
-/* =====================================================
-   CARDS
-   ===================================================== */
+/* CARDS */
 
 .info-card {
     background: linear-gradient(145deg, #13243A, #0F1C2E);
@@ -691,9 +967,7 @@ hr {
 }
 
 
-/* =====================================================
-   METRICS
-   ===================================================== */
+/* METRICS */
 
 div[data-testid="stMetric"] {
     background: linear-gradient(145deg, #13243A, #0F1C2E);
@@ -711,9 +985,7 @@ div[data-testid="stMetricValue"] {
 }
 
 
-/* =====================================================
-   BUTTONS
-   ===================================================== */
+/* BUTTONS */
 
 .stButton > button,
 .stFormSubmitButton > button {
@@ -731,9 +1003,7 @@ div[data-testid="stMetricValue"] {
 }
 
 
-/* =====================================================
-   DATAFRAMES & EXPANDERS
-   ===================================================== */
+/* DATAFRAMES & EXPANDERS */
 
 [data-testid="stDataFrame"] {
     border: 1px solid #294158;
@@ -787,8 +1057,6 @@ with st.sidebar:
 
 def dashboard():
 
-    # CUSTOM METALLIC AURORA GRADIENT HEADING
-    # ORIGINAL AURORA TITLE STYLING PRESERVED
     st.markdown(
         '<div class="home-title">AURORA</div>',
         unsafe_allow_html=True
@@ -910,7 +1178,6 @@ def dashboard():
 
 # =========================================================
 # BATTERY INFORMATION
-# NASA DATASET ONLY — NO LIVE MEASUREMENTS
 # =========================================================
 
 def battery_information():
@@ -1000,9 +1267,6 @@ def battery_information():
             f"{battery} · {total_cycles} NASA Discharge Cycles",
             expanded=False
         ):
-
-            # Critical/Warning/Good status display intentionally removed.
-            # This page presents historical NASA reference measurements only.
 
             st.markdown("#### Experimental Capacity Information")
 
@@ -1213,7 +1477,9 @@ def battery_analysis():
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("Measured Capacity", f"{capacity:.3f} Ah")
-    col2.metric("State of Health", f"{soh:.1f}%")
+
+    with col2:
+        render_animated_soh(soh, status, battery)
 
     col3.metric(
         "Discharge Cycle",
@@ -1253,9 +1519,7 @@ def battery_analysis():
 
     st.divider()
 
-    # =====================================================
     # GRAPH 1: CAPACITY DEGRADATION
-    # =====================================================
 
     st.subheader("Capacity Degradation")
 
@@ -1318,9 +1582,7 @@ def battery_analysis():
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # =====================================================
     # GRAPH 2: STATE OF HEALTH TREND
-    # =====================================================
 
     st.subheader("State of Health Trend")
 
@@ -1361,9 +1623,7 @@ def battery_analysis():
 
     st.plotly_chart(soh_fig, use_container_width=True)
 
-    # =====================================================
     # GRAPH 3: ACTUAL VS PREDICTED CAPACITY
-    # =====================================================
 
     st.divider()
 
@@ -1386,7 +1646,6 @@ def battery_analysis():
 
     else:
 
-        # Fit linear regression using the selected cell's data.
         slope, intercept = np.polyfit(x, y, 1)
 
         predicted_capacity = slope * x + intercept
@@ -1453,7 +1712,6 @@ def battery_analysis():
             use_container_width=True
         )
 
-        # Prediction model performance on the fitted dataset.
         mae = float(np.mean(np.abs(y - predicted_capacity)))
 
         rmse = float(
@@ -1485,9 +1743,7 @@ def battery_analysis():
             "future-capacity forecast."
         )
 
-    # =====================================================
     # CAPACITY SUMMARY
-    # =====================================================
 
     first_capacity = float(
         battery_df.iloc[0]["capacity_Ah"]
